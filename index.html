@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+<style>
+body {
+  overflow: hidden;
+}
+
+</style>
+</head>
+
+<body>
+<h1 style="text-align:center"> I3A49 HW6 </h1>
+<hr>
+<div id = "select1" style="text-align:center;font-size:20px" >
+Login to create new records&nbsp;&nbsp;&nbsp;
+<input type = "text" id = 'uname'><button id='submit2'>Submit</button>
+<br>or<br>
+Choose people to review (his/her) activity
+<select id='observerSelect'></select>&nbsp;<button id='submit1'>Submit</button>
+<hr>
+</div>
+<div id = "select2" style="text-align:center;font-size:20px" >
+Choose  date
+<select id='dateSelect'></select>&nbsp;<button id='submit3'>Submit</button>
+<br>
+<hr>
+</div>
+
+<div id="container" style="float:left; margin:3px; width:60vw; height:50vw">
+</div>
+<div id = "playRecord" style="float:left; margin-left: 10px; width:32vw;">
+  <br>
+  <button id="replay" style="width:100%">Replay </button>
+  <br>
+  </div>
+ <div id = "option" style="float:left; margin-left: 10px; width:32vw;">
+  <br>
+  <button id="play" style="width:100%">Playback </button>
+  <br>
+  <br>
+  <button id="clear" style="width:100%">Clear </button>
+  <br>
+  <br>
+  <button id="save" style="width:100%">Save</button>
+  <br>
+</div>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/84/three.min.js"></script>
+<script src="https://threejs.org/examples/js/controls/OrbitControls.js">
+</script>
+<script>
+var camera, scene, renderer, controls;
+var raycaster = new THREE.Raycaster();
+var mouse = new THREE.Vector2();
+
+var logs = [];
+var ti = [];
+var xzi = [];
+var firstPick = true;
+var isMoving = false;
+var avatar, nose;
+var moveStart;
+var username;
+var date;
+var log;
+
+$('#select2').css ('display', 'none');
+$('#container').css ('display', 'none');
+$('#playRecord').css ('display', 'none');
+$('#option').css ('display', 'none');
+
+
+$('#submit1').click (function() {
+  $('#select1').css ('display', 'none');
+  $('#select2').css ('display', '');
+  username = $('#observerSelect').val();
+  showActivities();
+});
+
+$('#submit2').click (function() {
+  $('#select1').css ('display', 'none');
+  $('#container').css ('display', '');
+  $('#option').css ('display', '');
+  username = $('#uname').val();
+  addNewUser();
+});
+
+$('#submit3').click (function() {
+  $('#select2').css ('display', 'none');
+  $('#container').css ('display', '');
+  $('#playRecord').css ('display', '');	
+  date =  $('#dateSelect').val();
+});
+
+function showList(){
+
+	console.log ('in download ...');
+	logFilename = 'names.dat' ;
+	// which one to retrieve?
+	
+	$.get ("http://127.0.0.1:1337/readName?filename=" + logFilename, function ( data ) {
+		console.log ('dataOut: ' + data.output);
+		
+		var tmp = data.output.split (' ');
+		
+		for (var i = 0; i < tmp.length - 1 ; i++) {
+			$('#observerSelect').append ( "<option value=" + tmp[i] + ">" + tmp[i] + "</option>" );
+		}
+		
+	});
+
+}
+
+function showActivities(){
+
+	console.log ('in download ...');
+	logFilename = 'acts.dat';
+	// which one to retrieve?
+	
+	$.get ("http://127.0.0.1:1337/readName?filename=" + logFilename, function ( data ) {
+		console.log ('dataOut: ' + data.output);
+		
+		var tmp = data.output.split (' ');
+		
+		for (var i = 0; i < tmp.length - 1 ; i++) {
+			if( tmp[i].match(username) !=  null ){
+				var datei = tmp[i].substr( username.length , 8 );
+				$('#dateSelect').append ( "<option value=" + datei + ">" + datei + "</option>" );
+			}
+		}
+		
+	});
+
+}
+
+function addNewUser(){
+	console.log ( 'login name: ' + username );
+	
+	$.get( "http://127.0.0.1:1337/login?name="+ username , function( data ) {
+		console.log ('after get');
+		console.log ('code: ' + data.status);
+		console.log ('output: ' + data.output);
+	
+	});(null)
+
+}
+
+var startTime = new Date().getTime();
+var pos = {
+  '1': [-20, -60],
+  '2': [-25, -25],
+  '3': [-65, 5],
+  '4': [-23, 58],
+  '5': [28, 58],
+  '6': [43, 7],
+  '7': [60, -57]
+}
+var pickables = [];
+var pick;
+
+$('#save').click(function() {
+  console.log(JSON.stringify(logs));
+
+  localStorage.setItem('activity', JSON.stringify(logs));
+  
+    var d = new Date();
+	var YYYYMMDD = d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate();
+	
+	saveLogname = username + YYYYMMDD;
+	$.get( "http://127.0.0.1:1337/saveLog?name=" + saveLogname , function( data ) {
+		console.log ('after get');
+		console.log ('code: ' + data.status);
+		console.log ('output: ' + data.output);
+	
+	});(null)
+	
+	// IIFE of records
+	var dd = [];
+	dd.push (new Date().getTime());
+	dd.push (logs.length);
+	for (var i = 0; i < logs.length; i++) {
+		dd.push (logs[i].dt);
+		dd.push (logs[i].code);
+	}
+	console.log ('dd: ' + dd);
+	log = jQuery.param ({ data: dd });
+	console.log (log);
+	
+	logFilename = username + YYYYMMDD + '.log';
+	console.log ('filename:' + logFilename);
+	console.log ('before get:' + log);
+	
+	$.get ("http://127.0.0.1:1337/writelog?filename=" + logFilename + '&'+ log, function ( data ) {
+		
+	});
+	
+  
+});
+
+$('#play').click(function() {
+  startPlayback();
+});
+
+$('#clear').click (function() {
+  ti = [];
+  xzi = [];
+  logs = [];
+  firstPick = true;
+  avatar.visible = false;
+});
+
+$('#restore').click (function() {
+	logs = JSON.parse (localStorage.getItem ('activity'));
+});
+
+$('#replay').click ( function() {
+
+	console.log ('in download ...');
+	logFilename = username + $('#dateSelect').val() + '.log';
+	// which one to retrieve?
+	
+	$.get ("http://127.0.0.1:1337/readlog?filename="+logFilename, function ( data ) {
+		console.log ('dataOut: ' + data.output);
+		
+		var replaylog = data.output.split (' ');
+		var date = logs[0];
+		
+		logs = [];
+		
+		var n = replaylog[1];
+		for (var i = 0; i < n; i++) {
+			var record = {
+				dt: replaylog[2+2*i],
+				code: replaylog[2+2*i+1]
+			};
+			logs.push(record);
+			ti.push ( replaylog[2+2*i] );
+			xzi.push (pos[ replaylog[2+2*i+1] ]);
+		}
+		isMoving = true;
+		avatar.visible = true;
+		moveStart = new Date().getTime();
+	});
+});
+
+function startPlayback () {
+	if (logs.length === 0)
+  	return;
+    
+	for (var i = 0; i < logs.length; i++) {
+      ti.push (logs[i].dt);
+	  xzi.push (pos[ logs[i].code]);
+	}
+	isMoving = true;
+	avatar.visible = true;
+	moveStart = new Date().getTime();
+}
+
+init();
+animate();
+
+function loadTexture(  mesh , url ) {
+
+  // instantiate a loader
+  var loader = new THREE.TextureLoader();
+  loader.setCrossOrigin('');
+  // load a resource
+  loader.load(
+    url, 
+    function (texture) {   // Function when resource is loaded
+      console.log ('texture loaded ...');
+      mesh.material = new THREE.MeshLambertMaterial( { map: texture});     
+    },   
+    function(xhr) {   // Function called when download progresses
+      console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+    },   
+    function(xhr) {   // Function called when download errors
+      console.log('An error happened');
+    }
+  );
+ 
+}
+
+function createAvatar(){
+
+  var geometry = new THREE.CylinderGeometry( 5, 5, 20, 32 );
+  var material = new THREE.MeshBasicMaterial( { color: 0xffffff } );
+	
+  avatar = new THREE.Mesh(geometry, material);
+  
+  nose = new THREE.Mesh(
+			 new THREE.ConeGeometry( 4, 15, 32 ), 
+			 new THREE.MeshBasicMaterial( { color: 0xff0000 } )
+  );
+  
+  nose.rotation.x = Math.PI/2;
+  nose.position.set( 0, 6, 5);
+  avatar.add( nose );
+  
+  scene.add(avatar);
+  avatar.visible = false;
+}
+
+function buildWall( wx, wz, px, pz, degree ){
+
+  var geometry = new THREE.BoxGeometry( wx, 12, wz );
+  var material = new THREE.MeshLambertMaterial( {
+    color: 0xffffff, transparent: true, opacity: 0.5
+  } ); 
+  
+  var wall = new THREE.Mesh( geometry, material );
+  wall.rotation.y = degree;
+  wall.position.set( px, 6, pz );
+  scene.add( wall );
+}
+
+function init() {
+  
+  showList();
+  
+  var ww = $("#container").innerWidth();
+  var hh = $("#container").innerHeight();
+  renderer = new THREE.WebGLRenderer();
+  renderer.setSize(ww, hh);
+  renderer.setClearColor(0x888888);
+  $("#container").append(renderer.domElement);
+
+  ////////////////////////////////////////////////
+	
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(60, ww / hh, 1, 10000);
+  camera.position.set(0, 300, 150);
+  
+  scene.add(camera);
+
+  var ambient = new THREE.AmbientLight(0x444444);
+  scene.add(ambient);
+
+  var directionalLight = new THREE.DirectionalLight(0xffffff);
+  directionalLight.position.set(0, 1, 1).normalize();
+  scene.add(directionalLight);
+  
+  var geometry = new THREE.PlaneGeometry(250, 250);
+  var material = new THREE.MeshLambertMaterial();
+
+  var ground = new THREE.Mesh(geometry, material);
+  scene.add(ground);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = 0.5;
+  loadTexture(ground , 'http://i.imgur.com/X9m4a7c.jpg');
+
+  pickplane = new THREE.Mesh(new THREE.PlaneGeometry(200, 200),
+    new THREE.MeshBasicMaterial({
+      color: 0xff1234
+    }));
+  pickplane.rotation.x = -Math.PI / 2;
+  scene.add(pickplane);
+  pickplane.material.visible = false;
+
+  var gridXZ = new THREE.GridHelper(200, 200, 'red', 'white');
+  scene.add(gridXZ);
+  
+  var geometry = new THREE.CircleGeometry(5, 32);
+  var material = new THREE.MeshBasicMaterial();
+  var circle = new THREE.Mesh(geometry, material);
+  circle.rotation.x = -Math.PI / 2;
+
+  addLoc(0x0000ff, pos['1'][0], pos['1'][1], '1');
+  addLoc(0x00ff00, pos['2'][0], pos['2'][1], '2');
+  addLoc(0x00ffff, pos['3'][0], pos['3'][1], '3');
+  addLoc(0xff0000, pos['4'][0], pos['4'][1], '4');
+  addLoc(0xff00ff, pos['5'][0], pos['5'][1], '5');
+  addLoc(0xffff00, pos['6'][0], pos['6'][1], '6');
+  addLoc(0x888888, pos['7'][0], pos['7'][1], '7');
+
+  function addLoc(hexColor, x, z, name) {
+    var cc = circle.clone();
+    cc.material = new THREE.MeshBasicMaterial({
+      color: hexColor
+    });
+    cc.position.set(x, 2, z);
+    scene.add(cc);
+    cc.name = name;
+    pickables.push(cc);
+  }
+  
+  createAvatar();
+  
+  pick = new THREE.Mesh (new THREE.RingGeometry (5, 7, 32), new THREE.MeshBasicMaterial({color:0x000000}));
+  pick.rotation.x = -Math.PI/2;
+  scene.add (pick);
+  pick.material.visible = false;
+
+
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  window.addEventListener('resize', onWindowResize, false);
+  $('#container').on('mousedown', onDocumentMouseDown);
+  $('#container').on('mouseup', onDocumentMouseUp);
+
+//////////////////////////////////////////////////////////////////////
+
+  var pointLight = new THREE.PointLight(0xffffff, 1, 300);
+  pointLight.position.set(0, 100, 100);
+  scene.add(pointLight);
+ 
+ ////////////////////////////////////////////////////////////////////
+ 
+   buildWall( 98, 1, 3, 82, 0 );
+   buildWall( 53, 1, -45.5, 55, Math.PI / 2 );
+   buildWall( 47, 1, 51.5, 58, Math.PI / 2 );
+   buildWall( 38, 4, 61, 32.5, 0 );
+   buildWall( 35, 4, -62.5, 26.5, 0 );
+   buildWall( 5, 4, 2.5, 32.5, 0 );
+   buildWall( 4, 2, 2, 29.5, 0 );
+   buildWall( 113, 4, 78, -26, Math.PI / 2 );
+   buildWall( 55, 4, 48.5, -80.5, 0 );
+   buildWall( 49, 4, -78, 0, Math.PI / 2 );
+   buildWall( 31, 4, -64.5, -26.5, 0 );
+   buildWall( 92, 4, -47, -36.5, Math.PI / 2 );
+   buildWall( 50, 4, -20, -80.5, 0 );
+   buildWall( 11, 4, -39.5, 7.5, 0 );
+   buildWall( 14, 4, -7, 7.5, 0 );
+   buildWall( 4, 5, 2, 8, 0 );
+   buildWall( 19, 2, 3, -4, Math.PI / 2 );
+   buildWall( 21, 2, 3, -39, Math.PI / 2 );
+   buildWall( 19, 2, -7.5, -46.5, 0 );
+   buildWall( 12, 1, -23, -46.5, 0 );
+   buildWall( 13, 2, -38.5, -46.5, 0 );
+   buildWall( 4, 3, 3, -77, 0 );
+   buildWall( 11, 2, 3, -70, Math.PI / 2 );
+   buildWall( 13, 2, 69.5, -28.5, 0 );
+   buildWall( 3, 2, -43.5, -59.5, 0 );
+}
+
+function onWindowResize() {
+  var ww = $("#container").innerWidth();
+  var hh = $("#container").innerHeight();
+
+  camera.aspect = ww / hh;
+  camera.updateProjectionMatrix();
+  renderer.setSize(ww, hh);
+}
+
+function onDocumentMouseUp () {
+	pick.material.visible = false;
+}
+
+
+function onDocumentMouseDown(event) {
+
+  event.preventDefault();
+
+  var viewportPos = $('#container').get(0).getBoundingClientRect();
+  mouse.x = ((event.clientX - viewportPos.left) / $('#container').innerWidth()) * 2 - 1;
+  mouse.y = -((event.clientY - viewportPos.top) / $('#container').innerHeight()) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  var intersects = raycaster.intersectObjects(pickables);
+  if (intersects.length > 0) {
+  
+  console.log (intersects[0].object.name);
+  
+  	pick.material.visible = true;
+    var xz = pos[intersects[0].object.name];
+    pick.position.x = xz[0];
+    pick.position.y = 2;  
+    pick.position.z = xz[1]; 
+    
+  	if (firstPick) {
+    	firstPick = false;
+      startTime = new Date().getTime();
+      dt = 0;
+    } else {
+    	dt = new Date().getTime() - startTime;
+    }
+    var record = {
+      dt: dt,
+      code: intersects[0].object.name
+    };
+    logs.push(record);
+  }
+}
+
+function animate() {
+
+  controls.update();
+  requestAnimationFrame(animate);
+  render();
+  if (isMoving) {
+  	t = new Date().getTime() - moveStart;
+    if (t > logs[logs.length-1].dt) {
+    	isMoving = false;
+      return;
+    }
+    var mov = interpolate (t);
+    avatar.position.x = mov[0];
+    avatar.position.y = 10;
+    avatar.position.z = mov[1];    
+  }
+  
+  function interpolate(t) {
+  	for (var i = 0; i < ti.length; i++) {
+    	if (t < ti[i]) break;
+    }
+    var s = (t - ti[i-1])/(ti[i] - ti[i-1]);
+    var x = (1-s)*xzi[i-1][0] + s*xzi[i][0];
+    var z = (1-s)*xzi[i-1][1] + s*xzi[i][1];
+    
+    var tmp = ( new THREE.Vector3( xzi[i-1][0] -  xzi[i][0] , 0 , xzi[i-1][1] - xzi[i][1] ) );
+    var angle = Math.atan2(-tmp.x, -tmp.z);
+    avatar.rotation.y  = angle;
+    
+    return [x,z];
+  }
+  
+}
+
+function render() {
+  renderer.render(scene, camera);
+}
+
+</script>
+</body>
+
+</html>
